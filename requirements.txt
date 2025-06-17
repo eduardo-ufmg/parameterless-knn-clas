@@ -5,3 +5,5 @@ scikit-learn
 networkx
 shapely
 joblib
+black
+isort
