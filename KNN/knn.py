@@ -14,8 +14,7 @@ from sklearn.utils.validation import check_array, check_is_fitted, check_X_y
 
 sys.path.append(str(Path(__file__).parent))
 
-from ConvexHull.convex_hull import \
-    objective_function_convex_hull_intersection_area
+from ConvexHull.convex_hull import objective_function_convex_hull_intersection_area
 from Dissimilarity.dissimilarity import objective_function_dissimilarity
 from Kernel.kernel import sparse_kernel_matrix
 from SpatialSpread.spatial_spread import objective_function_spatial_spread
@@ -59,11 +58,17 @@ def gabriel_graph(X: np.ndarray) -> nx.Graph:
         # Fallback for degenerate cases (e.g., all points are collinear).
         return nx.complete_graph(X.shape[0])
 
+    # Ensure each simplex is an iterable (e.g., a list)
+    trisimplices = [
+        list(simplex) if isinstance(simplex, (list, tuple, np.ndarray)) else [simplex]
+        for simplex in tri.simplices
+    ]
+
     # 2. Build a map from each vertex to the list of simplices (triangles) it's part of.
     #    This allows for efficient lookup of neighboring triangles.
     n_samples = X.shape[0]
     vertex_to_simplices = [[] for _ in range(n_samples)]
-    for i, simplex in enumerate(tri.simplices):
+    for i, simplex in enumerate(trisimplices):
         for vertex in simplex:
             vertex_to_simplices[vertex].append(i)
 
@@ -75,8 +80,12 @@ def gabriel_graph(X: np.ndarray) -> nx.Graph:
     # Using a set ensures we only check each edge once.
     checked_edges = set()
 
-    for i, simplex in enumerate(tri.simplices):
-        for u, v in [(simplex[0], simplex[1]), (simplex[1], simplex[2]), (simplex[2], simplex[0])]:
+    for i, simplex in enumerate(trisimplices):
+        for u, v in [
+            (simplex[0], simplex[1]),
+            (simplex[1], simplex[2]),
+            (simplex[2], simplex[0]),
+        ]:
             # Ensure u < v to have a canonical representation for the edge.
             if u > v:
                 u, v = v, u
@@ -89,7 +98,9 @@ def gabriel_graph(X: np.ndarray) -> nx.Graph:
 
             # Find common simplices between vertices u and v to identify the third
             # vertex 'w' of adjacent triangles.
-            common_simplices_indices = set(vertex_to_simplices[u]).intersection(vertex_to_simplices[v])
+            common_simplices_indices = set(vertex_to_simplices[u]).intersection(
+                vertex_to_simplices[v]
+            )
 
             for simplex_idx in common_simplices_indices:
                 # Find the third vertex 'w' in the triangle.
@@ -98,9 +109,9 @@ def gabriel_graph(X: np.ndarray) -> nx.Graph:
 
                 # Check the Gabriel condition: angle 'uwv' must not be obtuse.
                 # This is true if: d(u,w)² + d(v,w)² >= d(u,v)²
-                d_uv_sq = np.sum((X[u] - X[v])**2)
-                d_uw_sq = np.sum((X[u] - X[w])**2)
-                d_vw_sq = np.sum((X[v] - X[w])**2)
+                d_uv_sq = np.sum((X[u] - X[v]) ** 2)
+                d_uw_sq = np.sum((X[u] - X[w]) ** 2)
+                d_vw_sq = np.sum((X[v] - X[w]) ** 2)
 
                 if d_uw_sq + d_vw_sq < d_uv_sq:
                     is_gabriel_edge = False
@@ -218,11 +229,11 @@ class ParameterlessKNN(BaseEstimator, ClassifierMixin):
 
                 # Temporarily fit a standard k-NN on the sub-train fold
                 dist_matrix = cdist(X_val, X_train)
-                
+
                 # Find the k nearest neighbors. The k value must be less than n_train_samples.
                 neighbor_indices = np.argpartition(dist_matrix, k, axis=1)[:, :k]
                 neighbor_labels = y_train[neighbor_indices]
-                
+
                 # Predict using majority vote
                 predictions, _ = mode(neighbor_labels, axis=1, keepdims=True)
                 accuracies.append(accuracy_score(y_val, predictions))
@@ -277,7 +288,7 @@ class ParameterlessKNN(BaseEstimator, ClassifierMixin):
             self._objective,
             bounds,
             args=(X_fit, y_fit),
-            updating='deferred',
+            updating="deferred",
             workers=-1,  # Use all available CPU cores
         )
 
